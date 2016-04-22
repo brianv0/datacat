@@ -14,7 +14,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
 
 import java.util.Set;
 import java.util.logging.Level;
@@ -53,12 +52,12 @@ public class DatasetSearch {
     public DatasetSearch(Connection conn, ModelProvider modelProvider, 
             Class<? extends DatacatPlugin>... plugins) throws IOException {
         this.plugins = plugins;
-        this.dmc = SearchUtils.buildMetaInfoGlobalContext( conn );
+        this.dmc = SearchUtils.buildDatasetMetaInfoGlobalContext( conn );
         this.conn = conn;
         this.modelProvider = modelProvider;
     }
     
-    public DirectoryStream<DatasetModel> search(LinkedList<DatacatNode> containers, DatasetView datasetView, 
+    public DirectoryStream<DatasetModel> search(DirectoryStream<DatacatNode> containers, DatasetView datasetView, 
             String query, String[] metaFieldsToRetrieve, String[] sortFields) throws ParseException, IOException {
         try {
             compileStatement(containers, datasetView, 
@@ -79,7 +78,7 @@ public class DatasetSearch {
         }
     }
     
-    protected Select compileStatement(LinkedList<DatacatNode> containers, DatasetView datasetView, 
+    protected Select compileStatement(DirectoryStream<DatacatNode> containers, DatasetView datasetView, 
             Optional<String> query, 
             Optional<String[]> retrieveFields, 
             Optional<String[]> sortFields) throws ParseException, SQLException, IOException {
