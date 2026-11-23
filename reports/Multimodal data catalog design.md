@@ -46,6 +46,15 @@ Two consequences follow.
 
 **Samples belong to the training-set specification, not to the data.** For records, a sample is usually a record. For an array, it is a windowing rule such as "two consecutive time steps over this region at this stride". For a whole-slide image it is a cropping rule; for a stream it is a clip or episode boundary. The same data object yields different samples under different specifications, so sample definition is recorded where it is chosen.
 
+**Record structures should be described with an existing tabular model.** W3C CSVW (CSV on the Web) and Rubin's Felis, which grew out of it, already define what a record descriptor needs: a table group containing tables, each with columns that carry a datatype, unit, nullability, description and a semantic annotation (a property URL in CSVW, an IVOA UCD in Felis), plus primary and foreign keys. Adopting that model has four uses here:
+
+- **Semantic columns.** The per-column annotation is where units and domain identifiers (InChIKey, UniProt accession, sky coordinates) are declared, which the content-identity index and similarity criteria depend on.
+- **Declared joins.** Foreign keys express the link from element metadata to reference tables of runs, exposures or calibrations, so reference-data joins are part of the schema.
+- **One descriptor for several things.** The same model describes data tables, manifests, annotation sets, and the registry of metadata attributes, since an attribute definition is a column definition.
+- **Generated interfaces.** Felis already produces database DDL and IVOA TAP_SCHEMA from its descriptions, which gives a route to a TAP service and to Croissant record-set export.
+
+The division of labour is that CSVW and Felis supply the logical and semantic description, while Arrow or Iceberg schemas supply physical types, because CSVW is oriented to CSV and handles nested types poorly. Neither covers arrays or streams; those descriptors should follow the CF conventions and Zarr metadata.
+
 Metadata is not tabular either. It should follow the iRODS attribute–value–unit form with Datacat's typed values (string, number, timestamp), extended with nested documents validated against registered schemas. It attaches at every level: collection, data object, version, replica, and element.
 
 ## What the two audiences share, and where they differ
