@@ -1,6 +1,6 @@
 # Goods (SIGMOD 2016) and the papers that followed
 
-Reading notes, November 2026. Goods was read in full from the published PDF. Unity Catalog, Big Metadata, Production ML Pipelines and the 5W1H catalog paper were read in full by a delegated reader and spot-checked against the text. Other papers in the table were confirmed by title, venue and abstract only. The IEEE Data Engineering Bulletin companion to Goods ("Managing Google's data lake: an overview of the Goods system", 39(3):5-14, 2016) could not be fetched.
+Reading notes, November 2026. Goods was read in full from the published PDF. Production ML Pipelines was also read in full. Unity Catalog, Big Metadata and the 5W1H catalog paper were read in full by a delegated reader and spot-checked against the text. Other papers in the table were confirmed by title, venue and abstract only. The IEEE Data Engineering Bulletin companion to Goods ("Managing Google's data lake: an overview of the Goods system", 39(3):5-14, 2016) could not be fetched.
 
 ## 1. Goods: Organizing Google's Datasets
 
@@ -182,3 +182,38 @@ From the later papers:
 18. **Anchored subgraph queries** for provenance, because raw traces reach thousands of nodes; and record whether an output was ever consumed, since most are not (Production ML Pipelines).
 19. **No catch-all metadata bucket.** Namespaced metadata payloads are at risk of becoming one; the 5W1H profiles are a candidate for the built-in namespaces, with "why" as the home of usage policy (Catalogs).
 20. **Data catalog and operational catalog are different jobs** with different consistency needs (TreeCat). mudcat intends to be both; the transactional core and the derived search and lineage services should keep that line clear.
+
+## 5. Production ML Pipelines, in more detail
+
+Second reading, of the arXiv version (2103.16007v1). Appendices not read.
+
+- **What a trace is.** A pipeline is a graph of operators (ingest, statistics, validation, transform, train, evaluate, push). A *trace* is the record of its runs: a directed acyclic graph of execution nodes and artifact nodes. A *data span* artifact is one chunk of input, for example one day of user interactions. Training typically reads a rolling window of spans.
+- **Traces grow without bound.** Continuous pipelines ingest spans and emit models for months. Runs share spans, and warm-starting links one model to the next, so "it is not uncommon for the trace to have a single large connected component". The largest trace had 6,953 nodes. The authors say tools to query or summarise traces "can become indispensable".
+- **Graphlets.** To get something analysable, they cut the trace per trainer execution: (a) all its ancestor executions and their artifacts, (b) analysis and validation executions on those data spans, (c) descendant executions not on a path to another trainer. Warm-start edges are cut on purpose, "to create smaller graphs of bounded complexity". 450,000 graphlets result.
+- **Where compute goes.** Training is under a third. Data and model analysis and validation are about 35%. Ingestion is about 22%, because TFX often makes a "hermetic" copy of each span and shuffles it into splits; "this cost can be avoided for data sources that provide snapshot-based access with randomization guarantees".
+- **Reuse.** Consecutive graphlets share on average 0.647 of their spans by Jaccard similarity; 57% of pairs share more than three quarters. Much of this is several models trained on the same inputs for A/B tests, or retraining after a code change.
+- **Similarity without the data.** The corpus has no raw data, which "might also be siloed for privacy reasons". Similarity between inputs is computed from per-span summary statistics only.
+- **Unpushed models.** A push deploys a model outside the pipeline. About 80% of graphlets are unpushed, about three between consecutive pushes. Unpushed graphlets cost as much as pushed ones. Even after generous discounts for warm-starting and shared work, waste is above 30%.
+- **No simple cause.** Push rate limits, model type, data drift and code change were each tested and rejected as the explanation. Code is unchanged 84.5% of the time between consecutive graphlets.
+- **What they could not measure.** "We do not have the requisite telemetry to precisely characterize when unpushed graphlets are indeed wasteful (e.g., unpushed models might be transitively useful by warmstarting models that do get pushed)."
+- **Mitigation.** A classifier on graphlet features predicts whether a run will push. Using features available before training, half the wasted compute is avoided with no loss of model freshness.
+
+Implications taken into mudcat: a recorded deployment event; onward use followed to the end of the chain (the telemetry the paper lacked); a run view equivalent to the graphlet; statistics on artifacts sufficient for similarity without data access; and immutable snapshots with exact resolutions as the answer to hermetic copies.
+
+## 6. Provenance and lineage as terms
+
+Both words are old in the database literature, and they come from different communities rather than different eras.
+
+- *Lineage* comes from data warehousing: tracing which source rows produced a view row. Trio (CIDR 2005) is "a system for integrated management of data, accuracy, and lineage".
+- *Provenance* comes from the theory of annotated queries and from scientific workflows, and became the name of the W3C standard (PROV, 2013). Goods, the Google production-ML paper and MLMD's documentation all say provenance.
+- Industry catalogs settled on *lineage* for the dataset-and-job dependency graph: OpenLineage, Unity Catalog, DataHub.
+- A 2025 SIGMOD paper uses both in one title: "Unified Lineage System: Tracking Data Provenance at Scale". The system is lineage; what it tracks is provenance.
+
+mudcat follows that last reading: provenance is the record (entities, activities, agents, sources, roles, methods), and lineage is the dependency view of it that queries walk.
+
+## 7. Public dataset description standards, checked November 2026
+
+- **Google Dataset Search** reads schema.org `Dataset` or equivalent DCAT, with experimental CSVW. Required: `name`, and `description` of 50 to 5000 characters. Recommended: `alternateName`, `creator`, `citation`, `funder`, `hasPart` or `isPartOf`, `identifier`, `isAccessibleForFree`, `keywords`, `license`, `measurementTechnique`, `sameAs`, `spatialCoverage`, `temporalCoverage`, `variableMeasured`, `version`, `url`, plus `includedInDataCatalog` and `distribution` with `contentUrl` and `encodingFormat`. Use `sameAs` for a republished copy and `isBasedOn` for a changed or aggregated one. The guide calls its own provenance and versioning advice "an initial outline". It recommends landing pages and a sitemap.
+- **In practice** (Benjelloun, Chen, Noy 2020, arXiv 2006.06894): about 34% of described datasets state a licence, 44% give a download link, about 11% have a DOI, and fewer than 1% use DCAT.
+- **DCAT 3** became a W3C Recommendation on 22 August 2024. It adds `dcat:DatasetSeries`, version properties (`dcat:version`, `dcat:hasVersion`, `dcat:previousVersion`, `dcat:hasCurrentVersion`) and `spdx:checksum`, recommends `odrl:hasPolicy` for rights, and has an alignment table to schema.org.
+- **Croissant 1.1** was published 29 January 2026. Required: `@context`, `@type` of `schema.org/Dataset`, `dct:conformsTo`, `description`, `license`, `name`, `url`, `creator`, `datePublished`. It describes resources as `cr:FileObject` and `cr:FileSet` and structure as `cr:RecordSet` and `cr:Field`. Version 1.1 adds provenance with PROV-O (`prov:wasGeneratedBy`, `prov:wasDerivedFrom`) and data-use conditions in `usageInfo`, with DUO terms or an `odrl:Offer`.
