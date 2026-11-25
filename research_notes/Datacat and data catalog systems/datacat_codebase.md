@@ -439,3 +439,24 @@ Add (absent today and expected of a successor)
 ### Gaps
 - These recommendations are derived from the March 2016 snapshot; upstream may already have addressed some "fix" items (for example Python 3 support has been, per 2023 commit titles). A diff against `slaclab/datacat` master is needed before treating any specific defect as current.
 - No user feedback, issue-tracker history (the `SDC` JIRA project) or operational post-mortems were available to weigh which weaknesses actually hurt in production.
+
+## Addendum: how registration over HTTP handled existing entries
+
+Added November 2026, from a second read of the REST and DAO code, for the design of registration commits in mudcat.
+
+Datacat registered one dataset per `POST`. The outcome depended on a comparison of the request with the stored state, expressed in HTTP status codes.
+
+- **The target of the request decided the work.** `DatasetsResource` derives a set of `DatasetOption` values from the kind of target and the payload: a `POST` to a folder or group adds `CREATE_NODE`; a version in the payload adds `CREATE_VERSION`; locations add `CREATE_LOCATIONS`. If locations are given without a version, the version is set to `NEW_VERSION` — [rest/src/main/java/org/srs/datacat/rest/resources/DatasetsResource.java:161-183](/home/user/datacat/rest/src/main/java/org/srs/datacat/rest/resources/DatasetsResource.java).
+- **Options.** `CREATE_NODE`, `CREATE_VERSION`, `CREATE_LOCATIONS`, `MERGE_NODE`, `MERGE_VERSION`, and three optimisations that skip existence checks: `SKIP_NODE_CHECK`, `SKIP_VERSION_CHECK`, `SKIP_LOCATION_CHECK` — [model/src/main/java/org/srs/datacat/model/dataset/DatasetOption.java](/home/user/datacat/model/src/main/java/org/srs/datacat/model/dataset/DatasetOption.java).
+- **Existing node.** `SqlDatasetDAO.createDataset` looks the name up in the parent. If it exists and `MERGE_NODE` is not set, it throws `DATASET_EXISTS`; with `MERGE_NODE` it patches the node. If it created the node, it skips the version check — [datacat-impl/src/main/java/org/srs/datacat/dao/sql/SqlDatasetDAO.java:60-90](/home/user/datacat/datacat-impl/src/main/java/org/srs/datacat/dao/sql/SqlDatasetDAO.java).
+- **Versions.** `createOrMergeDatasetVersion` compares the requested version ID with the current one. Without merge, `getCreationVersionID` throws if the version exists. With merge, an equal ID deletes the current version and inserts the new one — [SqlDatasetDAO.java:121-143](/home/user/datacat/datacat-impl/src/main/java/org/srs/datacat/dao/sql/SqlDatasetDAO.java).
+- **Locations.** `createDatasetLocation` asserts that the location can be created unless the check is skipped.
+- **Status codes.** The comment above `handleFileAlreadyExists` states the intended protocol — [DatasetsResource.java:214-240](/home/user/datacat/rest/src/main/java/org/srs/datacat/rest/resources/DatasetsResource.java):
+  - `POST` to a container, dataset exists and the representations conflict: 409.
+  - Dataset exists but the version does not: 409 with the dataset URL in the `Location` header, so the client continues there.
+  - Dataset and version exist but not all locations: 409 with the dataset-and-version URL.
+  - Dataset exists and the representations do not conflict, with nothing more to add: 302 Found.
+  - The same pattern one level down for a `POST` to a dataset (version) and to a version (locations).
+
+So Datacat had the idea of an idempotent, conditional create: an equal entry is success (302), a different one is a conflict (409), and a partly existing one redirects the client to the level where it must continue. Its limits were one request per dataset, several round trips for a partly existing entry, no atomic batch, and no use of the standard HTTP preconditions (`If-Match`, `If-None-Match`, entity tags), which the earlier notes already record as absent.
+
