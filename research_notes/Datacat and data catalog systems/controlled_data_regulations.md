@@ -57,6 +57,33 @@ Sources: university web pages and two arXiv papers found by search.
 
 No source confirmed a US-persons-only rule for these enclaves in general; that restriction follows from the export-control determination of each project.
 
+## NIST SP 800-171 Revision 2 requirements that fall on the software
+
+A search confirmed the numbering of these requirements through a university CMMC mapping, a withdrawn NIST handbook and the DoD Level 2 assessment guide. The short descriptions are paraphrases, and some come from memory of the publication. Check the wording in the Revision 2 text before use.
+
+| Number | Subject |
+|---|---|
+| 3.1.1, 3.1.2, 3.1.5 | Limit access to authorised users and to permitted functions; least privilege |
+| 3.1.3 | Control the flow of CUI in accordance with approved authorisations |
+| 3.1.4 | Separation of duties |
+| 3.1.9 | Privacy and security notices consistent with CUI rules |
+| 3.1.10, 3.1.11 | Session lock and session termination |
+| 3.1.22 | Control CUI posted or processed on publicly accessible systems |
+| 3.3.1, 3.3.2 | Create and retain audit logs; trace actions to individual users |
+| 3.3.4 | Alert in the event of an audit logging process failure |
+| 3.3.8, 3.3.9 | Protect audit information; limit management of audit logging to a subset of privileged users |
+| 3.4.6, 3.4.7 | Least functionality; restrict nonessential functions and services |
+| 3.5.1 to 3.5.3 | Identify and authenticate users; multifactor authentication |
+| 3.8.3, 3.8.4, 3.8.9 | Sanitise media; mark media; protect backups |
+| 3.13.4 | Prevent unauthorised and unintended information transfer through shared system resources |
+| 3.13.8, 3.13.16 | Cryptography in transit; confidentiality of CUI at rest |
+| 3.13.11 | FIPS-validated cryptography |
+| 3.14.1 | Flaw remediation |
+
+A catalog that holds metadata about CUI is itself an asset in the scope of the assessment, even when the data bytes are on other storage: it holds names, descriptions, statistics, indexes, the audit log, backups, and the credentials that give access to the bytes.
+
+Source for the numbering: [University of Hawaii CMMC levels mapping](https://hawaii.edu/infosec/minimum-standards/cmmc/levels-1-3), [NIST SP 800-171 Revision 2](https://nvlpubs.nist.gov/nistpubs/specialpublications/nist.sp.800-171r2.pdf).
+
 ## What this means for a catalog
 
 1. The catalog holds controlled information itself: names, descriptions, fields, statistics, embeddings, previews, the search index, the change stream, logs and backups.
