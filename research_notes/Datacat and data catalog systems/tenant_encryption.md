@@ -71,17 +71,28 @@ Sources: `design/encryption-data-at-rest.md` and the command-line reference in t
 
 The design is the closest published one to SalesforceDB for a key-value store, and the only one in these notes that states how the log is handled. It is not something to depend on.
 
-## 5. PostgreSQL
+## 5. PostgreSQL and pg_tde
 
-Source: Percona documentation for `pg_tde` [search].
+Source: the documentation in the percona/pg_tde repository, main branch (limitations, features, supported versions, WAL encryption, multi-tenant setup, FAQ) [paper].
 
 - PostgreSQL has no transparent data encryption in its core [memory].
-- `pg_tde` has one principal key per **database**. The internal keys of that database are wrapped by it. A default key covers databases with no key of their own.
-- WAL encryption is one setting and one key for the whole cluster. It is not per database.
-- `pg_tde` needs Percona's distribution of PostgreSQL [memory].
-- Managed PostgreSQL services take one KMS key per instance or cluster [memory].
+- **Distribution.** `pg_tde` is available only for Percona Server for PostgreSQL 17.5 and later. That distribution has an extended storage manager interface that community PostgreSQL does not have. Citus and TimescaleDB do not work on it. A build for version 16 is a preview.
+- **Two levels of keys.** Each relation file has an *internal key*: "a table with 4 indexes will have 5 internal keys". A *principal key* in a key management store wraps the internal keys.
+- **The principal key is per database.** "Multi-tenancy allows you to encrypt different databases with different keys." A default principal key covers databases with none of their own. No finer unit than the database has a principal key.
+- **What is encrypted:** tables that use the `tde_heap` access method, their indexes, TOAST tables and temporary tables. Encryption is a choice for each table.
+- **What is not encrypted:** the system catalogs, "which include statistics and metadata", and the temporary files that a query writes when it needs more than `work_mem`.
+- **The WAL has one key for the cluster,** the server key. `pg_tde.wal_encrypt` is one setting and needs a restart. With it, WAL is encrypted "for both encrypted and unencrypted tables".
+- **Rotation.** A principal key can be replaced, which wraps the internal keys again. There is no function to replace an internal key. A full rewrite of a table (`VACUUM FULL`, `TRUNCATE`, some `ALTER TABLE`) makes a new one.
+- **Ciphers:** AES-CBC for data files, AES-CTR for WAL, AES-GCM for the wrap of internal keys.
+- **Operations.** WAL encryption needs the wrapper tools of pg_tde for archive and restore. Barman and `pg_receivewal` are not supported. pgBackRest works with three of its options off. Patroni is tested.
+- **Logical replication** works, but a subscriber stores plaintext unless it encrypts for itself.
+- Managed PostgreSQL services take one KMS key per instance or cluster [memory]. They do not offer `pg_tde` [memory].
 
-Consequence: PostgreSQL can give a tenant its own key only when the tenant has its own database, and then the WAL is still under one key for all tenants of the cluster. Shared tables cannot have per-tenant keys at the page level, for the reason that the Salesforce paper gives: pages are mutable, and a page holds rows of several tenants.
+Consequences:
+
+- A tenant gets its own key only when it has its own database. Partitions of a shared table, one for each tenant, get different internal keys but the same principal key, so no tenant can hold or remove its own key.
+- For a tenant with its own database, three things stay outside its key: the WAL (and so the WAL archive and point-in-time recovery), the planner statistics in the system catalogs, which hold sample values of columns, and temporary files of queries.
+- Shared tables cannot have per-tenant keys at the page level, for the reason that the Salesforce paper gives: pages are mutable, and a page holds rows of several tenants.
 
 ## 6. What this means for mudcat
 
@@ -96,5 +107,4 @@ The catalog rows in PostgreSQL do not have properties 2 and 3. That is the open 
 - https://github.com/apple/foundationdb/blob/release-7.4/design/encryption-data-at-rest.md
 - https://github.com/apple/foundationdb/wiki/Encryption-data-at-rest
 - https://docs.snowflake.com/en/user-guide/security-encryption-manage
-- https://docs.percona.com/pg-tde/architecture/index.html
-- https://docs.percona.com/pg-tde/wal-encryption.html
+- https://github.com/percona/pg_tde/tree/main/documentation/docs
